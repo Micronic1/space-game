@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Космическая ракета</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #111;
+            font-family: Arial, sans-serif;
+            touch-action: none;
+        }
+        canvas {
+            border: 2px solid #fff;
+            background: #000;
+            box-shadow: 0 0 20px rgba(255,255,255,0.2);
+        }
+        #ui-container {
+            position: relative;
+            width: 360px;
+        }
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2.2em;
+            color: #ff3333;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px #000;
+            display: none;
+            text-align: center;
+            width: 100%;
+        }
+        .buttons-group {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        .btn {
+            padding: 8px 16px;
+            font-size: 14px;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        #restart {
+            background-color: #ff3333;
+        }
+        #restart:hover {
+            background-color: #ff5555;
+        }
+        #resetRecord {
+            background-color: #555;
+        }
+        #resetRecord:hover {
+            background-color: #777;
+        }
+        .new-record-banner {
+            color: #ffcc00;
+            font-size: 0.7em;
+            margin-top: 5px;
+            display: none;
+            animation: blink 0.8s infinite alternate;
+        }
+        @keyframes blink {
+            from { opacity: 0.4; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <canvas id="gameCanvas"></canvas>
+        <div class="game-over" id="gameOver">
+            ИГРА ОКОНЧЕНА
+            <div class="new-record-banner" id="newRecordBanner">🏆 НОВЫЙ РЕКОРД! 🏆</div>
+            <div class="buttons-group">
+                <button class="btn" id="restart">Заново</button>
+                <button class="btn" id="resetRecord">Сбросить рекорд</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = 360;
+        canvas.height = 640;
+
+        const rocket = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            vx: 0,
+            vy: 0,
+            width: 30,
+            height: 46
+        };
+
+        let targetX = canvas.width / 2;
+        let targetY = canvas.height / 2;
+
+        let meteorites = [];
+        let stars = [];
+        let particles = [];
+        let score = 0;
+        
+        // Загружаем лучший результат из памяти браузера (localStorage)
+        let bestScore = localStorage.getItem('spaceBestScore') ? parseInt(localStorage.getItem('spaceBestScore')) : 0;
+        let isNewRecord = false;
+        let gameOver = false;
+
+        // Фон (звезды)
+        for (let i = 0; i < 40; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2 + 1,
+                speed: Math.random() * 0.5 + 0.2
+            });
+        }
+
+        function spawnMeteorites() {
+            meteorites = [];
+            for (let i = 0; i < 5; i++) {
+                const size = Math.random() * 20 + 15;
+                meteorites.push({
+                    x: Math.random() * (canvas.width - size),
+                    y: Math.random() * (canvas.height / 2),
+                    width: size,
+                    height: size,
+                    vx: (Math.random() - 0.5) * 3,
+                    vy: (Math.random() - 0.5) * 3
+                });
+            }
+        }
+
+        function createExplosion(x, y) {
+            for (let i = 0; i < 35; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 6 + 1;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    size: Math.random() * 4 + 2,
+                    alpha: 1.0
+                });
+            }
+        }
+
+        function updateGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Отрисовка звезд
+            ctx.fillStyle = '#fff';
+            stars.forEach(star => {
+                star.y += star.speed;
+                if (star.y > canvas.height) star.y = 0;
+                ctx.fillRect(star.x, star.y, star.size, star.size);
+            });
+
+            // Отрисовка частиц взрыва
+            particles.forEach((p, index) => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.02;
+                if (p.alpha <= 0) {
+                    particles.splice(index, 1);
+                } else {
+                    ctx.fillStyle = `rgba(255, 50, 50, ${p.alpha})`;
+                    ctx.fillRect(p.x, p.y, p.size, p.size);
+                }
+            });
+
+            if (!gameOver) {
+                // Физика резиновой веревки (тяга к курсору, коэффициент 0.008)
+                const dx = targetX - rocket.x;
+                const dy = targetY - rocket.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                const pullStrength = 0.008; 
+                
+                if (distance > 5) {
+                    rocket.vx += dx * pullStrength;
+                    rocket.vy += dy * pullStrength;
+                }
+
+                rocket.vx *= 0.88;
+                rocket.vy *= 0.88;
+
+                rocket.x += rocket.vx;
+                rocket.y += rocket.vy;
+
+                const currentSpeed = Math.sqrt(rocket.vx * rocket.vx + rocket.vy * rocket.vy);
+
+                // Движение метеоритов
+                ctx.fillStyle = '#ff3333';
+                meteorites.forEach(m => {
+                    m.x += m.vx;
+                    m.y += m.vy;
+
+                    if (m.x <= 0 || m.x + m.width >= canvas.width) m.vx *= -1;
+                    if (m.y <= 0 || m.y + m.height >= canvas.height) m.vy *= -1;
+
+                    ctx.fillRect(m.x, m.y, m.width, m.height);
+
+                    // Столкновение с ракетой
+                    if (
+                        m.x < rocket.x + rocket.width / 2 &&
+                        m.x + m.width > rocket.x - rocket.width / 2 &&
+                        m.y < rocket.y + rocket.height / 2 &&
+                        m.y + m.height > rocket.y - rocket.height / 2
+                    ) {
+                        gameOver = true;
+                        
+                        // Проверяем, побили ли рекорд
+                        const currentPoints = Math.floor(score / 10);
+                        if (currentPoints > bestScore) {
+                            bestScore = currentPoints;
+                            localStorage.setItem('spaceBestScore', bestScore);
+                            isNewRecord = true;
+                        } else {
+                            isNewRecord = false;
+                        }
+
+                        // Показываем экран конца игры и баннер рекорда
+                        document.getElementById('newRecordBanner').style.display = isNewRecord ? 'block' : 'none';
+                        document.getElementById('gameOver').style.display = 'block';
+
+                        createExplosion(rocket.x, rocket.y);
+                    }
+                });
+
+                // --- ОТРИСОВКА РАКЕТЫ ---
+                ctx.save();
+                ctx.translate(rocket.x, rocket.y);
+
+                let angle = Math.atan2(dy, dx) + Math.PI / 2;
+                ctx.rotate(angle);
+
+                // Треугольное пламя сзади
+                if (currentSpeed > 0.5) {
+                    ctx.fillStyle = '#ff5500';
+                    ctx.beginPath();
+                    ctx.moveTo(-7, rocket.height / 2);
+                    ctx.lineTo(7, rocket.height / 2);
+                    ctx.lineTo(0, rocket.height / 2 + Math.min(currentSpeed * 3, 25));
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.fillStyle = '#ffcc00';
+                    ctx.beginPath();
+                    ctx.moveTo(-3, rocket.height / 2);
+                    ctx.lineTo(3, rocket.height / 2);
+                    ctx.lineTo(0, rocket.height / 2 + Math.min(currentSpeed * 1.5, 12));
+                    ctx.closePath();
+                    ctx.fill();
+                }
+
+                // Корпус ракеты
+                ctx.fillStyle = '#00aaff';
+                ctx.beginPath();
+                ctx.moveTo(0, -rocket.height / 2);
+                ctx.lineTo(rocket.width / 2, rocket.height / 3);
+                ctx.lineTo(rocket.width / 2, rocket.height / 2);
+                ctx.lineTo(-rocket.width / 2, rocket.height / 2);
+                ctx.lineTo(-rocket.width / 2, rocket.height / 3);
+                ctx.closePath();
+                ctx.fill();
+
+                // Крылья
+                ctx.fillStyle = '#0066cc';
+                ctx.beginPath();
+                ctx.moveTo(-rocket.width / 2, rocket.height / 6);
+                ctx.lineTo(-rocket.width / 2 - 7, rocket.height / 2);
+                ctx.lineTo(-rocket.width / 2, rocket.height / 2);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.moveTo(rocket.width / 2, rocket.height / 6);
+                ctx.lineTo(rocket.width / 2 + 7, rocket.height / 2);
+                ctx.lineTo(rocket.width / 2, rocket.height / 2);
+                ctx.closePath();
+                ctx.fill();
+
+                // Иллюминатор
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(0, -2, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#33ccff';
+                ctx.beginPath();
+                ctx.arc(0, -2, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+                // -----------------------
+
+                score += 1;
+
+                // Вывод текущего и лучшего счета на экран
+                ctx.font = '16px Arial';
+                ctx.fillStyle = '#fff';
+                ctx.fillText(`Счет: ${Math.floor(score / 10)}`, 15, 25);
+                ctx.fillStyle = '#ffcc00';
+                ctx.fillText(`Рекорд: ${bestScore}`, 15, 48);
+            }
+
+            requestAnimationFrame(updateGame);
+        }
+
+        function moveHandler(clientX, clientY) {
+            if (gameOver) return;
+            const rect = canvas.getBoundingClientRect();
+            targetX = clientX - rect.left;
+            targetY = clientY - rect.top;
+        }
+
+        canvas.addEventListener('mousemove', (e) => moveHandler(e.clientX, e.clientY));
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0) {
+                moveHandler(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: true });
+
+        function restartGame() {
+            gameOver = false;
+            score = 0;
+            particles = [];
+            rocket.x = canvas.width / 2;
+            rocket.y = canvas.height / 2;
+            rocket.vx = 0;
+            rocket.vy = 0;
+            targetX = canvas.width / 2;
+            targetY = canvas.height / 2;
+            document.getElementById('gameOver').style.display = 'none';
+            spawnMeteorites();
+        }
+
+        // Кнопка перезапуска
+        document.getElementById('restart').addEventListener('click', restartGame);
+
+        // Кнопка сброса рекорда
+        document.getElementById('resetRecord').addEventListener('click', () => {
+            bestScore = 0;
+            localStorage.setItem('spaceBestScore', 0);
+            alert('Рекорд сброшен!');
+        });
+
+        spawnMeteorites();
+        updateGame();
+    </script>
+</body>
+</html>
