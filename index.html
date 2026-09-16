@@ -84,11 +84,11 @@
     <div id="ui-container">
         <canvas id="gameCanvas"></canvas>
         <div class="game-over" id="gameOver">
-            ИГРА ОКОНЧЕНА
-            <div class="new-record-banner" id="newRecordBanner">🏆 НОВЫЙ РЕКОРД! 🏆</div>
+            ГРА ЗАКІНЧЕНА
+            <div class="new-record-banner" id="newRecordBanner">🏆 РЕКОРД ОНОВЛЕНО! 🏆</div>
             <div class="buttons-group">
-                <button class="btn" id="restart">Заново</button>
-                <button class="btn" id="resetRecord">Сбросить рекорд</button>
+                <button class="btn" id="restart">Старт</button>
+                <button class="btn" id="resetRecord">Скинути рекорд</button>
             </div>
         </div>
     </div>
@@ -187,12 +187,12 @@
             });
 
             if (!gameOver) {
-                // Физика резиновой веревки (тяга к курсору, коэффициент 0.008)
+                // Физика резиновой веревки (тяга к курсору, коэффициент 0.003)
                 const dx = targetX - rocket.x;
                 const dy = targetY - rocket.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                const pullStrength = 0.008; 
+                const pullStrength = 0.003; 
                 
                 if (distance > 5) {
                     rocket.vx += dx * pullStrength;
@@ -316,7 +316,7 @@
                 // Вывод текущего и лучшего счета на экран
                 ctx.font = '16px Arial';
                 ctx.fillStyle = '#fff';
-                ctx.fillText(`Счет: ${Math.floor(score / 10)}`, 15, 25);
+                ctx.fillText(`Рахунок: ${Math.floor(score / 10)}`, 15, 25);
                 ctx.fillStyle = '#ffcc00';
                 ctx.fillText(`Рекорд: ${bestScore}`, 15, 48);
             }
